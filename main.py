@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 import pandas as pd
-import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,7 +10,23 @@ from plotly_config import create_base_layout, apply_config_to_figure
 from registry import WIDGETS, register_widget
 import treasury_gov_pandas.datasets.deposits_withdrawals_operating_cash.load
 import fed_net_liquidity
+import fed_balance_sheet
 import datetime
+
+# Get available dates from FRED data
+df = fed_balance_sheet.load_diff_dataframe()
+if df is not None and not df.empty:
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.set_index('date').diff().reset_index()
+    available_dates = sorted(
+        df['date'].dt.strftime('%Y-%m-%d').unique(),
+        reverse=True
+    )
+else:
+    available_dates = []
+
+# Create options list for the widget
+date_options = [{"label": date, "value": date} for date in available_dates]
 
 app = FastAPI()
 
@@ -29,6 +44,7 @@ app.add_middleware(
 
 ROOT_PATH = Path(__file__).parent.resolve()
 
+
 @app.get("/")
 def read_root():
     return {"Info": "Full example for OpenBB Custom Backend"}
@@ -42,7 +58,9 @@ async def get_widgets():
 @app.get("/transactions")
 @register_widget({
     "name": "Transactions",
-    "description": "Shows all transactions for a specific date with minimum amount filter",
+    "description": (
+        "Shows all transactions for a specific date with minimum amount filter"
+    ),
     "category": "Treasury",
     "type": "chart",
     "endpoint": "transactions",
@@ -94,7 +112,9 @@ def get_transactions(
             datetime.datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
             return JSONResponse(
-                content={"error": "Invalid date format. Please use YYYY-MM-DD format."},
+                content={
+                    "error": "Invalid date format. Please use YYYY-MM-DD format."
+                },
                 status_code=400
             )
 
@@ -103,7 +123,9 @@ def get_transactions(
             df = treasury_gov_pandas.datasets.deposits_withdrawals_operating_cash.load.load()
         except ImportError:
             return JSONResponse(
-                content={"error": "treasury_gov_pandas package not found. Please install it."},
+                content={
+                    "error": "treasury_gov_pandas package not found. Please install it."
+                },
                 status_code=500
             )
         except Exception as e:
@@ -155,7 +177,9 @@ def get_transactions(
         # Check if any data remains after filtering
         if df.empty:
             return JSONResponse(
-                content={"error": f"No transactions found above minimum amount {min_amount}"},
+                content={
+                    "error": f"No transactions found above minimum amount {min_amount}"
+                },
                 status_code=404
             )
 
@@ -169,7 +193,9 @@ def get_transactions(
             y=df[metric],
             text=df[metric].apply(lambda x: f"${x:,.2f}"),
             textposition='auto',
-            marker_color=df[metric].apply(lambda x: 'red' if x < 0 else 'green')
+            marker_color=df[metric].apply(
+                lambda x: 'red' if x < 0 else 'green'
+            )
         ))
 
         # Set the layout
@@ -481,3 +507,195 @@ def get_fed_net_liquidity_data(
             status_code=500
         )
 
+@app.get("/fed-balance-sheet")
+@register_widget({
+    "name": "Federal Reserve Balance Sheet",
+    "description": (
+        "Shows the Federal Reserve's balance sheet components over time"
+    ),
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "fed-balance-sheet",
+    "gridData": {"w": 40, "h": 15},
+    "source": "Federal Reserve",
+    "data": {"chart": {"type": "bar"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (
+                datetime.datetime.now() - datetime.timedelta(days=20*365)
+            ).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_fed_balance_sheet(
+    start_date: str = "2005-01-01",
+    theme: str = "dark"
+):
+    """Get Federal Reserve balance sheet data and return as Plotly figure."""
+    try:
+        # Load the dataframe
+        df = fed_balance_sheet.load_dataframe()
+
+        # Filter by date
+        df = df[df['date'] > start_date]
+
+        # Create the figure
+        fig = go.Figure()
+
+        # Add traces for each component
+        for column in df.columns[1:]:
+            if column in fed_balance_sheet.assets:
+                name = f'A: {column} - {fed_balance_sheet.all_items[column]}'
+            elif column in fed_balance_sheet.liabilities:
+                name = f'L: {column} - {fed_balance_sheet.all_items[column]}'
+            else:
+                name = f'{column} - {fed_balance_sheet.all_items[column]}'
+
+            fig.add_trace(
+                go.Bar(
+                    x=df['date'],
+                    y=df[column],
+                    name=name,
+                    hovertemplate='<b>'+name+'</b><br>Date: %{x}<br>Value: %{y}<extra></extra>'
+                )
+            )
+
+        # Set the layout
+        fig.update_layout(
+            create_base_layout(
+                x_title="Date",
+                y_title="Amount (Millions)",
+                theme=theme
+            ),
+            barmode='relative',
+            xaxis_tickangle=-45
+        )
+
+        # Apply theme configuration
+        fig = apply_config_to_figure(fig, theme)
+
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+@app.get("/fed-balance-sheet-weekly")
+@register_widget({
+    "name": "Federal Reserve Balance Sheet Weekly Changes",
+    "description": (
+        "Shows weekly changes in the Federal Reserve's balance sheet components"
+    ),
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "fed-balance-sheet-weekly",
+    "gridData": {"w": 40, "h": 15},
+    "source": "Federal Reserve",
+    "data": {"chart": {"type": "bar"}},
+    "params": [
+        {
+            "paramName": "start_date_week",
+            "value": "2025-03-26",
+            "label": "Week Start Date",
+            "show": True,
+            "description": "Select week to view changes",
+            "type": "text",
+            "options": date_options
+        }
+    ],
+})
+def get_fed_balance_sheet_weekly(
+    start_date_week: str = None,
+    theme: str = "dark"
+):
+    """Get Federal Reserve balance sheet weekly changes and return as Plotly figure."""
+    try:
+        # Load the dataframe
+        df = fed_balance_sheet.load_diff_dataframe()
+
+        # Convert date column to datetime if it's not already
+        if not pd.api.types.is_datetime64_any_dtype(df['date']):
+            df['date'] = pd.to_datetime(df['date'])
+
+        # Get last year of data
+        one_year_ago = datetime.datetime.now() - datetime.timedelta(days=365)
+        df = df[df['date'] > one_year_ago]
+
+        # Calculate weekly changes
+        df = df.set_index('date').diff().reset_index()
+
+        # Check if start_date_week is provided
+        if start_date_week is None:
+            return JSONResponse(
+                content={"error": "start_date_week parameter is required"},
+                status_code=400
+            )
+
+        # Convert start_date_week to datetime for comparison
+        start_date_dt = datetime.datetime.strptime(start_date_week, "%Y-%m-%d")
+
+        # Get data for selected week
+        week_data = df[df['date'].dt.date == start_date_dt.date()]
+        
+        # Check if week_data is empty
+        if week_data.empty:
+            return JSONResponse(
+                content={"error": f"No data found for date {start_date_week}"},
+                status_code=404
+            )
+            
+        week_data = week_data.iloc[0]
+
+        # Create the figure
+        fig = go.Figure()
+
+        # Add traces for assets and liabilities
+        for column in df.columns[1:]:
+            if column in fed_balance_sheet.assets:
+                name = f'A: {column} - {fed_balance_sheet.all_items[column]}'
+                color = 'green'
+            elif column in fed_balance_sheet.liabilities:
+                name = f'L: {column} - {fed_balance_sheet.all_items[column]}'
+                color = 'red'
+            else:
+                name = f'{column} - {fed_balance_sheet.all_items[column]}'
+                color = 'blue'
+
+            fig.add_trace(
+                go.Bar(
+                    x=[name],
+                    y=[week_data[column]],
+                    name=name,
+                    marker_color=color,
+                    hovertemplate='<b>'+name+'</b><br>Change: %{y}<extra></extra>'
+                )
+            )
+
+        # Set the layout
+        fig.update_layout(
+            create_base_layout(
+                x_title="Balance Sheet Component",
+                y_title="Weekly Change (Millions)",
+                theme=theme
+            ),
+            barmode='group',
+            xaxis_tickangle=-45
+        )
+
+        # Apply theme configuration
+        fig = apply_config_to_figure(fig, theme)
+
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )

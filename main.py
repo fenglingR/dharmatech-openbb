@@ -6,9 +6,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from plotly_config import create_base_layout, apply_config_to_figure
 from registry import WIDGETS, register_widget
 import treasury_gov_pandas.datasets.deposits_withdrawals_operating_cash.load
+import fed_net_liquidity
+import datetime
 
 app = FastAPI()
 
@@ -316,6 +319,126 @@ def get_transactions(
             ),
             xaxis_tickangle=-45,
             showlegend=False
+        )
+
+        # Apply theme configuration
+        fig = apply_config_to_figure(fig, theme)
+
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+
+@app.get("/fed-net-liquidity")
+@register_widget({
+    "name": "Fed Net Liquidity",
+    "description": "Shows Federal Reserve Net Liquidity metrics including WALCL, RRP, TGA, REM and NL",
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "fed-net-liquidity",
+    "gridData": {"w": 40, "h": 15},
+    "source": "Federal Reserve",
+    "data": {"chart": {"type": "line"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        },
+        {
+            "paramName": "metric",
+            "value": "NL",
+            "label": "Metric",
+            "show": True,
+            "description": "Select metric to display",
+            "type": "text",
+            "options": [
+                {"label": "Net Liquidity", "value": "NL"},
+                {"label": "WALCL", "value": "WALCL"},
+                {"label": "RRP", "value": "RRP"},
+                {"label": "TGA", "value": "TGA"},
+                {"label": "REM", "value": "REM"}
+            ]
+        }
+    ],
+})
+def get_fed_net_liquidity(
+    start_date: str = "2023-01-01",
+    metric: str = "NL",
+    theme: str = "dark"
+):
+    """Get Federal Reserve Net Liquidity data and return as Plotly figure."""
+    try:
+        # Load the dataframe
+        df = fed_net_liquidity.load_dataframe()
+
+        # Filter by date
+        df = df[df['date'] > start_date]
+
+        # Create subplots with 2 rows
+        fig = make_subplots(
+            rows=2, 
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.1,
+            row_heights=[0.7, 0.3]
+        )
+
+        # Add main line chart
+        fig.add_trace(
+            go.Scatter(
+                x=df['date'],
+                y=df[metric],
+                mode='lines',
+                name=metric,
+            ),
+            row=1, col=1
+        )
+
+        # Add diff bar chart if available
+        diff_col = f"{metric}_diff"
+        if diff_col in df.columns:
+            # Create separate traces for positive and negative values
+            positive_mask = df[diff_col] >= 0
+            negative_mask = df[diff_col] < 0
+            
+            # Add positive values trace
+            fig.add_trace(
+                go.Bar(
+                    x=df.loc[positive_mask, 'date'],
+                    y=df.loc[positive_mask, diff_col],
+                    name=f"{metric} Increase",
+                    marker_color='green'
+                ),
+                row=2, col=1
+            )
+            
+            # Add negative values trace
+            fig.add_trace(
+                go.Bar(
+                    x=df.loc[negative_mask, 'date'],
+                    y=df.loc[negative_mask, diff_col],
+                    name=f"{metric} Decrease",
+                    marker_color='red'
+                ),
+                row=2, col=1
+            )
+
+        # Set the layout
+        fig.update_layout(
+            create_base_layout(
+                x_title="Date",
+                y_title="Amount (Billions)",
+                theme=theme
+            ),
+            xaxis_tickangle=-45
         )
 
         # Apply theme configuration

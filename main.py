@@ -556,3 +556,100 @@ def get_fed_net_liquidity(
             content={"error": str(e)},
             status_code=500
         )
+
+@app.get("/fed-net-liquidity-data")
+@register_widget({
+    "name": "Fed Net Liquidity Data",
+    "description": "Shows Federal Reserve Net Liquidity metrics as a dataframe",
+    "category": "Treasury",
+    "type": "table",
+    "endpoint": "fed-net-liquidity-data",
+    "gridData": {"w": 40, "h": 15},
+    "source": "Federal Reserve",
+    "data": {
+        "table" : {
+            "showAll": True,
+            "columnsDefs": [
+                {
+                    "field": "WALCL Change",
+                    "headerName": "WALCL Change",
+                    "cellDataType": "number",
+                    "renderFn": "greenRed"
+                },
+                {
+                    "field": "RRP Change",
+                    "headerName": "RRP Change",
+                    "cellDataType": "number",
+                    "renderFn": "greenRed"
+                },
+                {
+                    "field": "TGA Change",
+                    "headerName": "TGA Change",
+                    "cellDataType": "number",
+                    "renderFn": "greenRed"
+                },
+                {
+                    "field": "REM Change",
+                    "headerName": "REM Change",
+                    "cellDataType": "number",
+                    "renderFn": "greenRed"
+                },
+                {
+                    "field": "NL Change",
+                    "headerName": "NL Change",
+                    "cellDataType": "number",
+                    "renderFn": "greenRed"
+                }
+            ]
+        }
+    },
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_fed_net_liquidity_data(
+    start_date: str = "2023-01-01"
+):
+    """Get Federal Reserve Net Liquidity data and return as a dataframe."""
+    try:
+        # Load the dataframe
+        df = fed_net_liquidity.load_dataframe()
+
+        # Filter by date
+        df = df[df['date'] > start_date]
+
+        # Select and rename columns
+        df = df[['date', 'WALCL', 'WALCL_diff', 'RRP', 'RRP_diff', 'TGA', 'TGA_diff', 'REM', 'REM_diff', 'NL', 'NL_diff']]
+        df = df.rename(columns={
+            'WALCL_diff': 'WALCL Change',
+            'RRP_diff': 'RRP Change',
+            'TGA_diff': 'TGA Change',
+            'REM_diff': 'REM Change',
+            'NL_diff': 'NL Change'
+        })
+
+        # Format numbers in billions
+        def format_billions(x):
+            return round(x / 1_000_000_000, 2)
+
+        # Apply formatting to all numeric columns
+        numeric_cols = ['WALCL', 'RRP', 'TGA', 'REM', 'NL', 'WALCL Change', 'RRP Change', 'TGA Change', 'REM Change', 'NL Change']
+        for col in numeric_cols:
+            df[col] = df[col].apply(format_billions)
+
+        # Convert to dictionary for JSON response
+        return df.to_dict(orient="records")
+    
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+

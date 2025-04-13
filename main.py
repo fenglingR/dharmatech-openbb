@@ -485,3 +485,74 @@ def get_fed_net_liquidity(
             content={"error": str(e)},
             status_code=500
         )
+
+@app.get("/fed-net-liquidity-all")
+@register_widget({
+    "name": "Fed Net Liquidity All",
+    "description": "Shows all Federal Reserve Net Liquidity metrics including WALCL, RRP, TGA, REM and NL",
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "fed-net-liquidity-all",
+    "gridData": {"w": 40, "h": 15},
+    "source": "Federal Reserve",
+    "data": {"chart": {"type": "line"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_fed_net_liquidity(
+    start_date: str = "2023-01-01",
+    theme: str = "dark"
+):
+    """Get Federal Reserve Net Liquidity data and return as Plotly figure."""
+    try:
+        # Load the dataframe
+        df = fed_net_liquidity.load_dataframe()
+
+        # Filter by date
+        df = df[df['date'] > start_date]
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add all metrics as separate traces
+        metrics = ["NL", "WALCL", "RRP", "TGA", "REM"]
+        colors = ["#00ff00", "#00a7ff", "#00a7ff", "#ff69b4", "#ff0000"]
+        for metric, color in zip(metrics, colors):
+            fig.add_trace(
+                go.Scatter(
+                    x=df['date'],
+                    y=df[metric],
+                    mode='lines',
+                    name=metric,
+                    line=dict(color=color)
+                )
+            )
+
+        # Set the layout
+        fig.update_layout(
+            create_base_layout(
+                x_title="Date",
+                y_title="Amount (Billions)",
+                theme=theme
+            ),
+            xaxis_tickangle=-45
+        )
+
+        # Apply theme configuration
+        fig = apply_config_to_figure(fig, theme)
+
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )

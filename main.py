@@ -237,7 +237,7 @@ def get_chains(theme: str = "dark", top_n: int = 30):
         },
         {
             "paramName": "date",
-            "value": "2024-01-01",
+            "value": "2025-01-02",
             "label": "Date",
             "show": True,
             "description": "Select date to view transactions",
@@ -256,13 +256,33 @@ def get_chains(theme: str = "dark", top_n: int = 30):
 def get_transactions(
     theme: str = "dark",
     metric: str = "transaction_fytd_amt",
-    date: str = "2024-01-01",
+    date: str = "2025-01-02",
     min_amount: int = 100000
 ):
     """Get daily transactions data and return as Plotly figure."""
     try:
+        # Validate date format
+        try:
+            datetime.datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            return JSONResponse(
+                content={"error": "Invalid date format. Please use YYYY-MM-DD format."},
+                status_code=400
+            )
+
         # Load the dataframe
-        df = treasury_gov_pandas.datasets.deposits_withdrawals_operating_cash.load.load()
+        try:
+            df = treasury_gov_pandas.datasets.deposits_withdrawals_operating_cash.load.load()
+        except ImportError:
+            return JSONResponse(
+                content={"error": "treasury_gov_pandas package not found. Please install it."},
+                status_code=500
+            )
+        except Exception as e:
+            return JSONResponse(
+                content={"error": f"Error loading data: {str(e)}"},
+                status_code=500
+            )
 
         # Convert numeric columns
         numeric_cols = [
@@ -289,6 +309,13 @@ def get_transactions(
 
         # Filter for specific date
         df = df.query(f'record_date == "{date}"')
+        
+        # Check if data exists for the given date
+        if df.empty:
+            return JSONResponse(
+                content={"error": f"No data available for date {date}"},
+                status_code=404
+            )
 
         # Convert withdrawals to negative values
         df.loc[df['transaction_type'] == 'Withdrawals', metric] = -df[metric]
@@ -296,6 +323,13 @@ def get_transactions(
         # Apply minimum amount filter
         df['absolute_value'] = df[metric].abs()
         df = df.query(f'absolute_value > {min_amount}')
+
+        # Check if any data remains after filtering
+        if df.empty:
+            return JSONResponse(
+                content={"error": f"No transactions found above minimum amount {min_amount}"},
+                status_code=404
+            )
 
         # Sort by metric value (from negative to positive)
         df = df.sort_values(metric, ascending=True)

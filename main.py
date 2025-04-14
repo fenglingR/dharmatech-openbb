@@ -529,11 +529,28 @@ def get_fed_net_liquidity_data(
             "show": True,
             "description": "Start date for the data",
             "type": "date"
+        },
+        {
+            "paramName": "item",
+            "value": "all",
+            "label": "Item",
+            "show": True,
+            "description": "Select items to display",
+            "type": "text",
+            "options": [
+                {"label": "All Items", "value": "all"},
+                {"label": "Assets Only", "value": "assets"},
+                {"label": "Liabilities Only", "value": "liabilities"}
+            ],
+            "style": {
+                "popupWidth": 300
+            }
         }
     ],
 })
 def get_fed_balance_sheet(
     start_date: str = "2005-01-01",
+    item: str = "all",
     theme: str = "dark"
 ):
     """Get Federal Reserve balance sheet data and return as Plotly figure."""
@@ -547,8 +564,21 @@ def get_fed_balance_sheet(
         # Create the figure
         fig = go.Figure()
 
+        # Determine which columns to display based on item selection
+        columns_to_display = []
+        if item == "assets":
+            columns_to_display = list(fed_balance_sheet.assets.keys())
+        elif item == "liabilities":
+            columns_to_display = list(fed_balance_sheet.liabilities.keys())
+        else:  # "all" or any other value
+            columns_to_display = list(fed_balance_sheet.all_items.keys())
+
         # Add traces for each component
         for column in df.columns[1:]:
+            # Skip if column not in selected items
+            if column not in columns_to_display:
+                continue
+
             if column in fed_balance_sheet.assets:
                 name = f'A: {column} - {fed_balance_sheet.all_items[column]}'
             elif column in fed_balance_sheet.liabilities:

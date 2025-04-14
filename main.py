@@ -9,12 +9,13 @@ from plotly.subplots import make_subplots
 from plotly_config import create_base_layout, apply_config_to_figure
 from registry import WIDGETS, register_widget
 import treasury_gov_pandas.datasets.deposits_withdrawals_operating_cash.load
+import treasury_gov_pandas.datasets.mts.mts_table_4.load
 import fed_net_liquidity
-import fed_balance_sheet
+import _fed_balance_sheet
 import datetime
 
 # Get available dates from FRED data
-df = fed_balance_sheet.load_diff_dataframe()
+df = _fed_balance_sheet.load_diff_dataframe()
 if df is not None and not df.empty:
     df['date'] = pd.to_datetime(df['date'])
     df = df.set_index('date').diff().reset_index()
@@ -556,7 +557,7 @@ def get_fed_balance_sheet(
     """Get Federal Reserve balance sheet data and return as Plotly figure."""
     try:
         # Load the dataframe
-        df = fed_balance_sheet.load_dataframe()
+        df = _fed_balance_sheet.load_dataframe()
 
         # Filter by date
         df = df[df['date'] > start_date]
@@ -567,11 +568,11 @@ def get_fed_balance_sheet(
         # Determine which columns to display based on item selection
         columns_to_display = []
         if item == "assets":
-            columns_to_display = list(fed_balance_sheet.assets.keys())
+            columns_to_display = list(_fed_balance_sheet.assets.keys())
         elif item == "liabilities":
-            columns_to_display = list(fed_balance_sheet.liabilities.keys())
+            columns_to_display = list(_fed_balance_sheet.liabilities.keys())
         else:  # "all" or any other value
-            columns_to_display = list(fed_balance_sheet.all_items.keys())
+            columns_to_display = list(_fed_balance_sheet.all_items.keys())
 
         # Add traces for each component
         for column in df.columns[1:]:
@@ -579,12 +580,12 @@ def get_fed_balance_sheet(
             if column not in columns_to_display:
                 continue
 
-            if column in fed_balance_sheet.assets:
-                name = f'A: {column} - {fed_balance_sheet.all_items[column]}'
-            elif column in fed_balance_sheet.liabilities:
-                name = f'L: {column} - {fed_balance_sheet.all_items[column]}'
+            if column in _fed_balance_sheet.assets:
+                name = f'A: {column} - {_fed_balance_sheet.all_items[column]}'
+            elif column in _fed_balance_sheet.liabilities:
+                name = f'L: {column} - {_fed_balance_sheet.all_items[column]}'
             else:
-                name = f'{column} - {fed_balance_sheet.all_items[column]}'
+                name = f'{column} - {_fed_balance_sheet.all_items[column]}'
 
             fig.add_trace(
                 go.Bar(
@@ -648,7 +649,7 @@ def get_fed_balance_sheet_weekly(
     """Get Federal Reserve balance sheet weekly changes and return as Plotly figure."""
     try:
         # Load the dataframe
-        df = fed_balance_sheet.load_diff_dataframe()
+        df = _fed_balance_sheet.load_diff_dataframe()
 
         # Convert date column to datetime if it's not already
         if not pd.api.types.is_datetime64_any_dtype(df['date']):
@@ -688,14 +689,14 @@ def get_fed_balance_sheet_weekly(
 
         # Add traces for assets and liabilities
         for column in df.columns[1:]:
-            if column in fed_balance_sheet.assets:
-                name = f'A: {column} - {fed_balance_sheet.all_items[column]}'
+            if column in _fed_balance_sheet.assets:
+                name = f'A: {column} - {_fed_balance_sheet.all_items[column]}'
                 color = 'green'
-            elif column in fed_balance_sheet.liabilities:
-                name = f'L: {column} - {fed_balance_sheet.all_items[column]}'
+            elif column in _fed_balance_sheet.liabilities:
+                name = f'L: {column} - {_fed_balance_sheet.all_items[column]}'
                 color = 'red'
             else:
-                name = f'{column} - {fed_balance_sheet.all_items[column]}'
+                name = f'{column} - {_fed_balance_sheet.all_items[column]}'
                 color = 'blue'
 
             fig.add_trace(
@@ -722,6 +723,369 @@ def get_fed_balance_sheet_weekly(
         # Apply theme configuration
         fig = apply_config_to_figure(fig, theme)
 
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+@app.get("/mts-income-taxes-monthly")
+@register_widget({
+    "name": "MTS Income Taxes - Monthly",
+    "description": "Shows monthly individual income tax receipts",
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "mts-income-taxes-monthly",
+    "gridData": {"w": 40, "h": 15},
+    "source": "U.S. Treasury",
+    "data": {"chart": {"type": "bar"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_mts_income_taxes_monthly(
+    start_date: str = "2023-01-01",
+    theme: str = "dark"
+):
+    """Get MTS Income Tax monthly data and return as Plotly figure."""
+    try:
+        df = treasury_gov_pandas.datasets.mts.mts_table_4.load.load()
+        df['record_date'] = pd.to_datetime(df['record_date'])
+        df['current_month_net_rcpt_amt'] = pd.to_numeric(
+            df['current_month_net_rcpt_amt'], errors='coerce'
+        )
+
+        df = df.query('classification_desc == "Total -- Individual Income Taxes"')
+        df = df[df['record_date'] > start_date]
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=df['record_date'],
+                y=df['current_month_net_rcpt_amt'],
+                name="Monthly Net Receipts",
+                hovertemplate='<b>Monthly Net Receipts</b><br>Date: %{x}<br>Amount: $%{y:,.2f}<extra></extra>'
+            )
+        )
+
+        fig.update_layout(
+            create_base_layout(
+                x_title="Date",
+                y_title="Amount",
+                theme=theme
+            ),
+            xaxis_tickangle=-45
+        )
+
+        fig = apply_config_to_figure(fig, theme)
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+
+@app.get("/mts-income-taxes-monthly-by-year")
+@register_widget({
+    "name": "MTS Income Taxes - Monthly by Year",
+    "description": "Shows monthly individual income tax receipts by year",
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "mts-income-taxes-monthly-by-year",
+    "gridData": {"w": 40, "h": 15},
+    "source": "U.S. Treasury",
+    "data": {"chart": {"type": "line"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_mts_income_taxes_monthly_by_year(
+    start_date: str = "2023-01-01",
+    theme: str = "dark"
+):
+    """Get MTS Income Tax monthly data by year and return as Plotly figure."""
+    try:
+        df = treasury_gov_pandas.datasets.mts.mts_table_4.load.load()
+        df['record_date'] = pd.to_datetime(df['record_date'])
+        df['current_month_net_rcpt_amt'] = pd.to_numeric(
+            df['current_month_net_rcpt_amt'], errors='coerce'
+        )
+
+        df = df.query('classification_desc == "Total -- Individual Income Taxes"')
+        df = df[df['record_date'] > start_date]
+
+        pivot = df.pivot_table(
+            values='current_month_net_rcpt_amt',
+            index='record_calendar_month',
+            columns='record_calendar_year'
+        )
+        melted = pivot.reset_index().melt(
+            id_vars='record_calendar_month',
+            value_name='current_month_net_rcpt_amt'
+        )
+
+        fig = go.Figure()
+        for year in melted['record_calendar_year'].unique():
+            year_data = melted[melted['record_calendar_year'] == year]
+            fig.add_trace(
+                go.Scatter(
+                    x=year_data['record_calendar_month'],
+                    y=year_data['current_month_net_rcpt_amt'],
+                    name=str(year),
+                    mode='lines'
+                )
+            )
+
+        fig.update_layout(
+            create_base_layout(
+                x_title="Month",
+                y_title="Amount",
+                theme=theme
+            ),
+            xaxis_tickangle=-45
+        )
+
+        fig = apply_config_to_figure(fig, theme)
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+
+@app.get("/mts-income-taxes-yoy-comparison")
+@register_widget({
+    "name": "MTS Income Taxes - YoY Comparison",
+    "description": "Shows year-over-year comparison of individual income tax receipts",
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "mts-income-taxes-yoy-comparison",
+    "gridData": {"w": 40, "h": 15},
+    "source": "U.S. Treasury",
+    "data": {"chart": {"type": "bar"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_mts_income_taxes_yoy_comparison(
+    start_date: str = "2023-01-01",
+    theme: str = "dark"
+):
+    """Get MTS Income Tax YoY comparison data and return as Plotly figure."""
+    try:
+        df = treasury_gov_pandas.datasets.mts.mts_table_4.load.load()
+        df['record_date'] = pd.to_datetime(df['record_date'])
+        df['current_month_net_rcpt_amt'] = pd.to_numeric(
+            df['current_month_net_rcpt_amt'], errors='coerce'
+        )
+
+        df = df.query('classification_desc == "Total -- Individual Income Taxes"')
+        df = df[df['record_date'] > start_date]
+        df = df.sort_values('record_date')
+
+        df['prev_year'] = df['current_month_net_rcpt_amt'].shift(12)
+        df['yoy_change'] = ((df['current_month_net_rcpt_amt'] - df['prev_year']) / df['prev_year']) * 100
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=df['record_date'],
+                y=df['yoy_change'],
+                name="YoY Change",
+                hovertemplate='<b>YoY Change</b><br>Date: %{x}<br>Change: %{y:,.2f}%<extra></extra>'
+            )
+        )
+
+        fig.update_layout(
+            create_base_layout(
+                x_title="Date",
+                y_title="Percentage Change",
+                theme=theme
+            ),
+            xaxis_tickangle=-45
+        )
+
+        fig = apply_config_to_figure(fig, theme)
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+
+@app.get("/mts-income-taxes-current-vs-prior")
+@register_widget({
+    "name": "MTS Income Taxes - Current vs Prior Year",
+    "description": "Shows current and prior year individual income tax receipts",
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "mts-income-taxes-current-vs-prior",
+    "gridData": {"w": 40, "h": 15},
+    "source": "U.S. Treasury",
+    "data": {"chart": {"type": "bar"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=10*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_mts_income_taxes_current_vs_prior(
+    start_date: str = (datetime.datetime.now() - datetime.timedelta(days=10*365)).strftime("%Y-%m-%d"),
+    theme: str = "dark"
+):
+    """Get MTS Income Tax current vs prior year data and return as Plotly figure."""
+    try:
+        df = treasury_gov_pandas.datasets.mts.mts_table_4.load.load()
+        df['record_date'] = pd.to_datetime(df['record_date'])
+        df['current_month_net_rcpt_amt'] = pd.to_numeric(
+            df['current_month_net_rcpt_amt'], errors='coerce'
+        )
+
+        df = df.query('classification_desc == "Total -- Individual Income Taxes"')
+        df = df[df['record_date'] > start_date]
+        df = df.sort_values('record_date')
+
+        df['prev_year'] = df['current_month_net_rcpt_amt'].shift(12)
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=df['record_date'],
+                y=df['current_month_net_rcpt_amt'],
+                name="Current Year",
+                hovertemplate='<b>Current Year</b><br>Date: %{x}<br>Amount: $%{y:,.2f}<extra></extra>'
+            )
+        )
+        fig.add_trace(
+            go.Bar(
+                x=df['record_date'],
+                y=df['prev_year'],
+                name="Prior Year",
+                hovertemplate='<b>Prior Year</b><br>Date: %{x}<br>Amount: $%{y:,.2f}<extra></extra>'
+            )
+        )
+
+        fig.update_layout(
+            create_base_layout(
+                x_title="Date",
+                y_title="Amount",
+                theme=theme
+            ),
+            barmode='group',
+            xaxis_tickangle=-45
+        )
+
+        fig = apply_config_to_figure(fig, theme)
+        return json.loads(fig.to_json())
+
+    except Exception as e:
+        return JSONResponse(
+            content={"error": str(e)},
+            status_code=500
+        )
+
+
+@app.get("/mts-income-taxes-fytd")
+@register_widget({
+    "name": "MTS Income Taxes - Fiscal Year-to-Date",
+    "description": "Shows fiscal year-to-date individual income tax receipts",
+    "category": "Treasury",
+    "type": "chart",
+    "endpoint": "mts-income-taxes-fytd",
+    "gridData": {"w": 40, "h": 15},
+    "source": "U.S. Treasury",
+    "data": {"chart": {"type": "line"}},
+    "params": [
+        {
+            "paramName": "start_date",
+            "value": (datetime.datetime.now() - datetime.timedelta(days=10*365)).strftime("%Y-%m-%d"),
+            "label": "Start Date",
+            "show": True,
+            "description": "Start date for the data",
+            "type": "date"
+        }
+    ],
+})
+def get_mts_income_taxes_fytd(
+    start_date: str = (datetime.datetime.now() - datetime.timedelta(days=10*365)).strftime("%Y-%m-%d"),
+    theme: str = "dark"
+):
+    """Get MTS Income Tax fiscal year-to-date data and return as Plotly figure."""
+    try:
+        df = treasury_gov_pandas.datasets.mts.mts_table_4.load.load()
+        df['record_date'] = pd.to_datetime(df['record_date'])
+        df['current_fytd_net_rcpt_amt'] = pd.to_numeric(
+            df['current_fytd_net_rcpt_amt'], errors='coerce'
+        )
+        df['prior_fytd_net_rcpt_amt'] = pd.to_numeric(
+            df['prior_fytd_net_rcpt_amt'], errors='coerce'
+        )
+
+        df = df.query('classification_desc == "Total -- Individual Income Taxes"')
+        df = df[df['record_date'] > start_date]
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=df['record_date'],
+                y=df['current_fytd_net_rcpt_amt'],
+                name="Current FYTD",
+                mode='lines'
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df['record_date'],
+                y=df['prior_fytd_net_rcpt_amt'],
+                name="Prior FYTD",
+                mode='lines'
+            )
+        )
+
+        fig.update_layout(
+            create_base_layout(
+                x_title="Date",
+                y_title="Amount",
+                theme=theme
+            ),
+            xaxis_tickangle=-45
+        )
+
+        fig = apply_config_to_figure(fig, theme)
         return json.loads(fig.to_json())
 
     except Exception as e:

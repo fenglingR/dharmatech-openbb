@@ -734,7 +734,7 @@ def get_fed_balance_sheet_weekly(
 @app.get("/mts-income-taxes-monthly")
 @register_widget({
     "name": "MTS Income Taxes - Monthly",
-    "description": "Shows monthly individual income tax receipts",
+    "description": "Shows monthly individual income tax receipts for selected year and previous years",
     "category": "Treasury",
     "type": "chart",
     "endpoint": "mts-income-taxes-monthly",
@@ -743,17 +743,24 @@ def get_fed_balance_sheet_weekly(
     "data": {"chart": {"type": "bar"}},
     "params": [
         {
-            "paramName": "start_date",
-            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
-            "label": "Start Date",
+            "paramName": "year",
+            "value": datetime.datetime.now().year-10,
+            "label": "Year",
             "show": True,
-            "description": "Start date for the data",
-            "type": "date"
+            "description": "Select year to display",
+            "type": "text",
+            "options": [
+                {"label": str(year), "value": year}
+                for year in range(
+                    datetime.datetime.now().year - 10,
+                    datetime.datetime.now().year + 1
+                )
+            ]
         }
     ],
 })
 def get_mts_income_taxes_monthly(
-    start_date: str = "2023-01-01",
+    year: int = datetime.datetime.now().year-10,
     theme: str = "dark"
 ):
     """Get MTS Income Tax monthly data and return as Plotly figure."""
@@ -765,24 +772,45 @@ def get_mts_income_taxes_monthly(
         )
 
         df = df.query('classification_desc == "Total -- Individual Income Taxes"')
-        df = df[df['record_date'] > start_date]
+
+        # Filter for selected year and previous years
+        df = df[
+            (df['record_calendar_year'].astype(int) >= int(year) - 1) &
+            (df['record_calendar_year'].astype(int) <= int(year))
+        ]
 
         fig = go.Figure()
-        fig.add_trace(
-            go.Bar(
-                x=df['record_date'],
-                y=df['current_month_net_rcpt_amt'],
-                name="Monthly Net Receipts",
-                hovertemplate='<b>Monthly Net Receipts</b><br>Date: %{x}<br>Amount: $%{y:,.2f}<extra></extra>'
+        
+        # Add a trace for each year
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        for year_val in sorted(df['record_calendar_year'].unique()):
+            year_data = df[df['record_calendar_year'] == year_val]
+            # Create a mapping from month number to month name
+            year_data = year_data.copy()  # Create a copy to avoid SettingWithCopyWarning
+            year_data['month_name'] = year_data['record_calendar_month'].map(
+                lambda x: month_names[int(x)-1]
             )
-        )
+            # Sort by original month number to maintain chronological order
+            year_data = year_data.sort_values('record_calendar_month')
+            
+            fig.add_trace(
+                go.Bar(
+                    x=year_data['month_name'],
+                    y=year_data['current_month_net_rcpt_amt'],
+                    name=str(year_val),
+                    hovertemplate='<b>%{fullData.name}</b><br>Month: %{x}<br>Amount: $%{y:,.2f}<extra></extra>'
+                )
+            )
 
         fig.update_layout(
             create_base_layout(
-                x_title="Date",
+                x_title="Month",
                 y_title="Amount",
                 theme=theme
             ),
+            barmode='group',
             xaxis_tickangle=-45
         )
 
@@ -808,21 +836,31 @@ def get_mts_income_taxes_monthly(
     "data": {"chart": {"type": "line"}},
     "params": [
         {
-            "paramName": "start_date",
-            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
-            "label": "Start Date",
+            "paramName": "year",
+            "value": datetime.datetime.now().year-10,
+            "label": "Year",
             "show": True,
-            "description": "Start date for the data",
-            "type": "date"
+            "description": "Select year to display",
+            "type": "text",
+            "options": [
+                {"label": str(year), "value": year}
+                for year in range(
+                    datetime.datetime.now().year - 10,
+                    datetime.datetime.now().year + 1
+                )
+            ]
         }
     ],
 })
 def get_mts_income_taxes_monthly_by_year(
-    start_date: str = "2023-01-01",
+    year: int = datetime.datetime.now().year-10,
     theme: str = "dark"
 ):
     """Get MTS Income Tax monthly data by year and return as Plotly figure."""
     try:
+        # Convert year to start date
+        start_date = datetime.datetime(year, 1, 1)
+        
         df = treasury_gov_pandas.datasets.mts.mts_table_4.load.load()
         df['record_date'] = pd.to_datetime(df['record_date'])
         df['current_month_net_rcpt_amt'] = pd.to_numeric(
@@ -843,11 +881,22 @@ def get_mts_income_taxes_monthly_by_year(
         )
 
         fig = go.Figure()
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
         for year in melted['record_calendar_year'].unique():
             year_data = melted[melted['record_calendar_year'] == year]
+            # Create a mapping from month number to month name
+            year_data = year_data.copy()  # Create a copy to avoid SettingWithCopyWarning
+            year_data['month_name'] = year_data['record_calendar_month'].map(
+                lambda x: month_names[int(x)-1]
+            )
+            # Sort by original month number to maintain chronological order
+            year_data = year_data.sort_values('record_calendar_month')
+            
             fig.add_trace(
                 go.Scatter(
-                    x=year_data['record_calendar_month'],
+                    x=year_data['month_name'],
                     y=year_data['current_month_net_rcpt_amt'],
                     name=str(year),
                     mode='lines'
@@ -886,7 +935,7 @@ def get_mts_income_taxes_monthly_by_year(
     "params": [
         {
             "paramName": "start_date",
-            "value": (datetime.datetime.now() - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d"),
+            "value": (datetime.datetime.now() - datetime.timedelta(days=10*365)).strftime("%Y-%m-%d"),
             "label": "Start Date",
             "show": True,
             "description": "Start date for the data",
@@ -895,7 +944,7 @@ def get_mts_income_taxes_monthly_by_year(
     ],
 })
 def get_mts_income_taxes_yoy_comparison(
-    start_date: str = "2023-01-01",
+    start_date: str = (datetime.datetime.now() - datetime.timedelta(days=10*365)).strftime("%Y-%m-%d"),
     theme: str = "dark"
 ):
     """Get MTS Income Tax YoY comparison data and return as Plotly figure."""

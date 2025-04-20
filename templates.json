@@ -1,0 +1,107 @@
+[
+    {
+        "name": "Fed Net Liquidity",
+        "img": "https://static.vecteezy.com/system/resources/thumbnails/027/221/813/small_2x/fed-text-in-wooden-circle-on-banknotes-background-credit-card-piggybank-calculator-federal-reserve-board-system-federal-reserve-interest-rate-hike-global-economy-recession-and-finance-concept-photo.jpg",
+        "img_dark": "https://static.vecteezy.com/system/resources/thumbnails/027/221/813/small_2x/fed-text-in-wooden-circle-on-banknotes-background-credit-card-piggybank-calculator-federal-reserve-board-system-federal-reserve-interest-rate-hike-global-economy-recession-and-finance-concept-photo.jpg",
+        "img_light": "https://static.vecteezy.com/system/resources/thumbnails/027/221/813/small_2x/fed-text-in-wooden-circle-on-banknotes-background-credit-card-piggybank-calculator-federal-reserve-board-system-federal-reserve-interest-rate-hike-global-economy-recession-and-finance-concept-photo.jpg",
+        "description": "Data curated by @dharmatrade",
+        "allowCustomization": true,
+        "tabs": {
+          "fed-net-liquidity": {
+            "id": "fed-net-liquidity",
+            "name": "FED Net Liquidity",
+            "layout": [
+              {
+                "i": "fed-net-liquidity",
+                "x": 0,
+                "y": 17,
+                "w": 40,
+                "h": 15
+              },
+              {
+                "i": "fed-net-liquidity-all",
+                "x": 0,
+                "y": 32,
+                "w": 40,
+                "h": 15
+              },
+              {
+                "i": "fed-net-liquidity-data",
+                "x": 0,
+                "y": 2,
+                "w": 40,
+                "h": 15,
+                "state": {
+                  "chartView": {
+                    "enabled": false,
+                    "chartType": "line"
+                  }
+                }
+              }
+            ]
+          },
+          "mts-income-taxes": {
+            "id": "mts-income-taxes",
+            "name": "MTS Income Taxes",
+            "layout": [
+              {
+                "i": "mts-income-taxes-current-vs-prior",
+                "x": 0,
+                "y": 2,
+                "w": 40,
+                "h": 15
+              },
+              {
+                "i": "mts-income-taxes-monthly-by-year",
+                "x": 0,
+                "y": 17,
+                "w": 40,
+                "h": 15
+              },
+              {
+                "i": "mts-income-taxes-yoy-comparison",
+                "x": 0,
+                "y": 32,
+                "w": 40,
+                "h": 15
+              },
+              {
+                "i": "mts-income-taxes-fytd",
+                "x": 0,
+                "y": 47,
+                "w": 40,
+                "h": 15
+              },
+              {
+                "i": "mts-income-taxes-monthly",
+                "x": 0,
+                "y": 62,
+                "w": 40,
+                "h": 15
+              }
+            ]
+          },
+          "fed-balance-sheet": {
+            "id": "fed-balance-sheet",
+            "name": "FED Balance Sheet",
+            "layout": [
+              {
+                "i": "fed-balance-sheet",
+                "x": 0,
+                "y": 2,
+                "w": 40,
+                "h": 15
+              },
+              {
+                "i": "fed-balance-sheet-weekly",
+                "x": 0,
+                "y": 17,
+                "w": 40,
+                "h": 19
+              }
+            ]
+          }
+        },
+        "groups": []
+    }
+]

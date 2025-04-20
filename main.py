@@ -55,6 +55,10 @@ def read_root():
 async def get_widgets():
     return WIDGETS
 
+@app.get("/templates.json")
+async def get_templates():
+    with open("templates.json", "r") as f:
+        return json.load(f)
 
 @app.get("/transactions")
 @register_widget({

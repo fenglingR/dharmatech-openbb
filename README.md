@@ -2,7 +2,11 @@
 
 A custom OpenBB backend providing Treasury and Federal Reserve data visualizations.
 
+![CleanShot 2025-04-20 at 16 15 36](https://github.com/user-attachments/assets/1f6335b6-5b0f-4a21-b19f-6cabd6bba870)
+
 You can add it on OpenBB by copy-pasting this link ot the workspace: https://dharmatech-openbb.fly.dev
+
+![CleanShot 2025-04-20 at 16 13 50](https://github.com/user-attachments/assets/75e74175-2990-4597-8820-9c6d10bb21c2)
 
 ## Prerequisites
 

@@ -1,17 +1,22 @@
-FROM python:3.10-slim
+# 设定基础镜像
+[cite_start]FROM python:3.10-slim [cite: 1]
 
-WORKDIR /app
+# 设置工作目录
+[cite_start]WORKDIR /app [cite: 1]
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 复制依赖文件
+[cite_start]COPY requirements.txt . [cite: 1]
+# 安装依赖
+[cite_start]RUN pip install --no-cache-dir -r requirements.txt [cite: 1]
 
-COPY . .
+# 复制所有项目文件到工作目录
+COPY . [cite_start]. [cite: 1]
 
-# Create static directory if it doesn't exist
-RUN mkdir -p static
+# 创建静态文件目录 (如果需要)
+[cite_start]RUN mkdir -p static [cite: 2]
 
-# Expose the port that the application will run on
-EXPOSE 5050
+# 声明容器对外暴露的端口
+[cite_start]EXPOSE 5050 [cite: 2]
 
-# Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5050"]
+# 定义容器启动时运行的命令
+[cite_start]CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5050"] [cite: 2]
